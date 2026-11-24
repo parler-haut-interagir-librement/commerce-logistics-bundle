@@ -4,6 +4,61 @@ All notable changes to `phil/commerce-logistics-bundle` will be documented in th
 
 Updates should follow the [Keep a CHANGELOG](https://keepachangelog.com/) principles.
 
+## 0.2.0-alpha - 2026-11-24
+
+### Added
+
+- `UnitsShipped` and `ShippedLine`: `Stock::ship()` and `Stock::shipPart()` dispatch, by its class, once per call that
+  moved units, the order's number and, per SKU and location, the units that left, at the call's moment in UTC; no
+  personal data. It is dispatched after the movements are written to the unit of work and before the application
+  flushes it, through the service `event_dispatcher` when there is one; the bundle requires
+  `symfony/event-dispatcher-contracts`.
+- Customer returns: `Stock::returnFromCustomer()` puts units a customer sent back on a shelf under the order's number,
+  never more of a SKU than left with the order and did not come back yet, refused otherwise with
+  `StockRefused::overReturned()`; the movement kind `returned`; `Reservation::shipped()`, `returned()`, `returnable()`
+  and `returnPart()`, and the reservation's `returned` column, 0 by default.
+- Adjustments by a difference: `Stock::adjust()` and `StockLevel::adjust()` change what is on hand by a difference,
+  never below zero, refused otherwise with `StockRefused::belowZero()`, under the level's version; the movement kind
+  `adjusted`.
+- The unit cost and owner of purchase order lines: `PurchaseLine`, which `Purchasing::order()` and `PurchaseOrder::of()`
+  take in place of the units of a SKU, with an optional `Money` unit cost and an optional owner, the caller's own
+  identifier; `PurchaseOrder::line()`, which a receipt reads back; the purchase order's `line_terms` column, null when
+  no line gives them. A database of 0.1.0-alpha gains the two columns and nothing else changes.
+- Costing, off by default: the configuration `costing.enabled`, `costing.method` — `weighted_average` or `fifo` — and
+  `costing.currency`; `Costing`, which `Stock` and `Purchasing` call with each movement, `CostLayer` and `CostEntry`,
+  tables `phil_commerce_logistics_cost_layer` and `_cost_entry`, `CostingMethod`, `CostEntryKind`, `CostShare` and
+  `CostRefused`; `CostRepository`, implemented by `DoctrineLogisticsRepository`, which finds the layers and entries
+  given to it and not flushed yet. Units come in at the unit cost of their purchase order line, or the one given to
+  `Stock::receive()`, and leave at the pool's average or from the oldest layer, in integers through
+  `Money::allocate()`; units without a known cost are counted apart, as uncosted.
+- Landed costs: `Purchasing::receive()` takes the freight, duties and brokerage of a receipt and shares them over its
+  lines of the shop's units with a unit cost, in proportion to their value, to the minor unit.
+- Variances by reason: `VarianceReason`, `Stock::adjustFor()` and the reason of `Stock::count()`, kept in the stock
+  journal's `reason` column, null by default, and, with costing, in the cost journal beside the value of the units at
+  cost.
+- Customer returns at their cost: with costing, `Stock::returnFromCustomer()` puts the units back at their share of
+  what the order's issues cost, under either method.
+- Consigned units: units received with an owner hold no value and never enter the shop's layers; `StockOwnership`,
+  whose alias an application points at its own service, says whose units leave a level the shop and owners share, and
+  `ShopUnitsFirst` lets the shop's own leave first.
+- `InventoryValuation`, a public alias of `InventoryValue`: the unit cost of a SKU, the stock valued at a moment
+  (`ValuedStock`), the cost of sales of a period (`SaleCost`) and the cost journal, a page at a time.
+
+### Changed
+
+- Requires the latest minor of each dependency (`doctrine/orm` 3.8, `symfony/event-dispatcher-contracts` 3.8,
+  `symfony/http-client-contracts` 3.8, `symfony/polyfill-php86` 1.43, …), and of each development requirement
+  (`doctrine/dbal` 4.6, `doctrine/doctrine-bundle` 3.4, `doctrine/persistence` 4.2).
+
+### Fixed
+
+- It requires `phil/commerce-bundle` 0.4, the version published on 2026-11-20, beside which its requirement of 0.2 or
+  0.3 kept it from installing.
+
+### Changed
+
+- It requires `phil/commerce-bundle` 0.5, the minor released the same evening.
+
 ## 0.1.0-alpha - 2026-11-20
 
 ### Added

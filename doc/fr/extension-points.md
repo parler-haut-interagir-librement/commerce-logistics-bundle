@@ -1,4 +1,4 @@
-<!-- phil-dev source-sha256=81445108863aad8bd632453488bdc15b80002ab8ab3e48d47a07d9516f85cac6 -->
+<!-- phil-dev source-sha256=b61d8d7f3aa250f5d5543d8512c0e420e7e94c8a59ef0a0cc1f701bdca58e113 -->
 <!-- phil-dev source-sha256=0 -->
 # Points d'extension
 
@@ -44,6 +44,29 @@ autoconfiguration ; `ConventionStock` les appelle tous, une fois par commande et
 | `conventions.window_days` | Combien de jours à l'avance une convention compte comme proche, de 0 à 366 ; 30 par défaut |
 | `conventions.online_channels` | Les canaux dont les commandes sont passées en ligne, avec les commandes sans canal |
 
+## Le calcul des coûts
+
+`Application\Contract\StockOwnership` dit à qui appartiennent les unités qui partent d'un niveau de stock que se partagent
+les unités de la boutique et des unités laissées en consignation. Avec le calcul des coûts activé, son alias pointe vers
+`ShopUnitsFirst`, les unités de la boutique d'abord ; une application, ou un module de consignation, le fait pointer
+vers un de ses propres services. `Application\Contract\InventoryValuation` est ce qu'une application, un rapport ou un
+catalogue lit de la valeur du stock : un alias public de `InventoryValue`, enregistré avec ou sans calcul des coûts.
+Voyez [Coûts](costing.md).
+
+| Configuration | Ce qu'elle règle |
+|---|---|
+| `costing.enabled` | Évalue le stock au coût ; désactivé par défaut |
+| `costing.method` | `weighted_average`, la valeur par défaut, ou `fifo` |
+| `costing.currency` | Le code ISO 4217 dans lequel chaque coût est donné, obligatoire une fois le calcul des coûts activé |
+
+## Les événements
+
+| Événement | Envoyé par | Quand |
+|---|---|---|
+| `Domain\Event\UnitsShipped` | `Stock`, par le service `event_dispatcher` quand il y en a un | Des unités ont quitté la tablette : une fois par `ship()` ou `shipPart()` qui a déplacé des unités, une ligne par *SKU* et par emplacement |
+
+L'événement ne porte que des identifiants et des quantités — voyez [Expéditions](shipments.md#les-unités-expédiées).
+
 ## Les dépôts
 
 Chaque port de dépôt est un alias public de l'adaptateur Doctrine du module ; une application le fait pointer vers un
@@ -62,20 +85,22 @@ de ses propres services sous le même contrat. `DoctrineLogisticsRepository` les
 | `SerialNumberRepository` | Les unités sérialisées, combien sont en stock à un emplacement, celles d'une commande |
 | `ShippingDocumentRepository` | Les numéros des bordereaux de livraison et des listes de prélèvement |
 | `ShippingWaveRepository` | Les vagues d'expédition, celles qui sont planifiées, et les commandes de chacune |
+| `Domain\Contract\CostRepository` | Les couches de coût, avec celles données et pas encore vidées, et le journal des coûts, additionnés par *SKU* et par emplacement ou par vente, et paginés |
 
 ## Les services
 
 | Service | Comment une application l'utilise |
 |---|---|
-| `Stock` | Reçoit, compte, transfère et réserve ; public — voyez [Stock](stock.md) |
+| `Stock` | Reçoit, compte, ajuste, transfère, réserve, expédie et reprend les retours de clients ; public — voyez [Stock](stock.md) |
 | `Shipments` | Expédie en un colis ou en plusieurs, avec le transporteur et le suivi ; public — voyez [Expéditions](shipments.md) |
 | `DeliveryOptions` | Les modes de livraison d'une zone, leurs prix et leurs jours estimés ; public — voyez [Livraison](delivery.md) |
 | `ShippingLabels` | Les tarifs et les étiquettes des transporteurs, le coût de chaque expédition, la marge d'une commande ; public — voyez [Transporteurs](carriers.md) |
 | `ConventionStock` | Les quantités préparées par convention, ce qui reste à imprimer, le chemin d'une commande passée en ligne ; public — voyez [Conventions](conventions.md) |
-| `Purchasing` | Les bons de commande et leurs réceptions ; public — voyez [Achats](purchasing.md) |
+| `Purchasing` | Les bons de commande, le coût unitaire et le propriétaire de leurs lignes, et leurs réceptions ; public — voyez [Achats](purchasing.md) |
 | `SerialNumbers` | Le numéro de série de chaque unité ; public — voyez [Achats](purchasing.md) |
 | `ShippingDocuments` | Les bordereaux de livraison et les listes de prélèvement ; public — voyez [Expéditions](shipments.md) |
 | `ShippingWaves` | Les commandes planifiées pour partir ensemble un jour estimé ; public — voyez [Expéditions](shipments.md) |
+| `InventoryValuation` | Le coût unitaire d'un *SKU*, le stock au coût, le coût des ventes, le journal des coûts ; public — voyez [Coûts](costing.md) |
 
-Avec `phil/commerce-returns-bundle`, un `Restocking` propre à l'application remet en stock les unités retournées par
-`Stock`.
+Avec `phil/commerce-returns-bundle`, sa remise en stock de la logistique, ou un `Restocking` propre à l'application, remet en stock les unités retournées par
+`Stock::returnFromCustomer()`, au coût auquel elles sont parties quand le calcul des coûts est activé.
